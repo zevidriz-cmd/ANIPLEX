@@ -27,10 +27,14 @@ import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.StarHalf
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -155,6 +159,8 @@ fun DetailScreen(
                     onWatchlistToggle = { viewModel.toggleWatchlist(state.data) },
                     onRatingSelected = { rating -> viewModel.setRating(animeId, rating) },
                     onSeasonSelected = { malId -> viewModel.resolveMALAndNavigate(malId) },
+                    onMarkAsWatched = { viewModel.markAsWatched(state.data.id, state.data.name, state.data.poster) },
+                    onRemoveFromHistory = { viewModel.removeFromHistory(state.data.id) },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -213,6 +219,8 @@ fun DetailContent(
     onWatchlistToggle: () -> Unit,
     onRatingSelected: (Int) -> Unit,
     onSeasonSelected: (String) -> Unit,
+    onMarkAsWatched: () -> Unit,
+    onRemoveFromHistory: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(0) }
@@ -222,6 +230,7 @@ fun DetailContent(
     val context = LocalContext.current
     val downloads by DownloadManager.downloads.collectAsStateWithLifecycle()
     
+    var showMoreMenu by remember { mutableStateOf(false) }
     var showCellularWarningDialog by remember { mutableStateOf(false) }
     var showCellularDisabledDialog by remember { mutableStateOf(false) }
     var pendingDownloadEpisode by remember { mutableStateOf<Episode?>(null) }
@@ -313,6 +322,134 @@ fun DetailContent(
                             contentDescription = "Back",
                             tint = Color.White
                         )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 48.dp, end = 16.dp)
+                    ) {
+                        IconButton(
+                            onClick = { showMoreMenu = true },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More options",
+                                tint = Color.White
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showMoreMenu,
+                            onDismissRequest = { showMoreMenu = false },
+                            modifier = Modifier.background(SurfaceDark)
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Mark as Finished", color = Color.White) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onMarkAsWatched()
+                                    Toast.makeText(context, "Marked as Watched", Toast.LENGTH_SHORT).show()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = CrunchyrollOrange)
+                                },
+                                colors = MenuDefaults.itemColors(
+                                    textColor = Color.White,
+                                    leadingIconColor = CrunchyrollOrange
+                                )
+                            )
+
+                            if (watchHistory != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Remove Watch Progress", color = Color.White) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        onRemoveFromHistory()
+                                        Toast.makeText(context, "Watch history cleared", Toast.LENGTH_SHORT).show()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Delete, contentDescription = null, tint = Color.LightGray)
+                                    },
+                                    colors = MenuDefaults.itemColors(
+                                        textColor = Color.White,
+                                        leadingIconColor = Color.LightGray
+                                    )
+                                )
+                            }
+
+                            DropdownMenuItem(
+                                text = { Text(if (isWatchlisted) "Remove from Watchlist" else "Add to Watchlist", color = Color.White) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onWatchlistToggle()
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = if (isWatchlisted) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                        contentDescription = null,
+                                        tint = CrunchyrollOrange
+                                    )
+                                },
+                                colors = MenuDefaults.itemColors(
+                                    textColor = Color.White,
+                                    leadingIconColor = CrunchyrollOrange
+                                )
+                            )
+
+                            DropdownMenuItem(
+                                text = { Text("Share Anime", color = Color.White) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    try {
+                                        val sendIntent = android.content.Intent().apply {
+                                            action = android.content.Intent.ACTION_SEND
+                                            putExtra(
+                                                android.content.Intent.EXTRA_TEXT,
+                                                "Check out ${animeDetail.name} on Aniplex! Here's the details: ${animeDetail.description.take(120)}..."
+                                            )
+                                            type = "text/plain"
+                                        }
+                                        val shareIntent = android.content.Intent.createChooser(sendIntent, null)
+                                        context.startActivity(shareIntent)
+                                    } catch (e: Exception) {
+                                        // Squelch
+                                    }
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Share, contentDescription = null, tint = Color.White)
+                                },
+                                colors = MenuDefaults.itemColors(
+                                    textColor = Color.White,
+                                    leadingIconColor = Color.White
+                                )
+                            )
+
+                            DropdownMenuItem(
+                                text = { Text("Copy Title", color = Color.White) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    try {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                        val clip = android.content.ClipData.newPlainText("Anime Title", animeDetail.name)
+                                        clipboard.setPrimaryClip(clip)
+                                        Toast.makeText(context, "Copied title to clipboard", Toast.LENGTH_SHORT).show()
+                                    } catch (e: Exception) {
+                                        // Squelch
+                                    }
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = null, tint = Color.White)
+                                },
+                                colors = MenuDefaults.itemColors(
+                                    textColor = Color.White,
+                                    leadingIconColor = Color.White
+                                )
+                            )
+                        }
                     }
 
                     // Cast button removed as per Stitch specs (hide Cast feature)
@@ -628,7 +765,7 @@ fun DetailContent(
                                         .padding(horizontal = 16.dp, vertical = 12.dp)
                                 ) {
                                     Text(
-                                        text = currentSeason?.title ?: "Season",
+                                        text = currentSeason?.title?.takeIf { it.isNotBlank() } ?: animeDetail.name,
                                         color = Color.White,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Medium,
@@ -653,7 +790,7 @@ fun DetailContent(
                                         HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                                         seasons.forEach { season ->
                                             Text(
-                                                text = season.title,
+                                                text = season.title.takeIf { it.isNotBlank() } ?: (animeDetail.name + if (season.seasonNumber > 1) " Season ${season.seasonNumber}" else ""),
                                                 color = if (season.malId == animeDetail.malId) CrunchyrollOrange else Color.White,
                                                 fontSize = 15.sp,
                                                 modifier = Modifier
@@ -699,7 +836,8 @@ fun DetailContent(
                         onPlayClick(epId, animeDetail.id, title, epNum, cat)
                     },
                     downloads = downloads,
-                    triggerDownload = triggerDownload
+                    triggerDownload = triggerDownload,
+                    watchHistory = watchHistory
                 )
                 1 -> CharactersTabContent(charactersState = charactersState)
                 2 -> RecommendationsTabContent(
@@ -852,7 +990,8 @@ fun EpisodesTabContent(
     onAudioTypeChange: (String) -> Unit,
     onPlayClick: (String, String, Int, String) -> Unit,
     downloads: List<com.aniplex.app.data.download.DownloadTask>,
-    triggerDownload: (Episode) -> Unit
+    triggerDownload: (Episode) -> Unit,
+    watchHistory: HistoryItem? = null
 ) {
     var showSeasonDialog by remember { mutableStateOf(false) }
     var selectedChunkIndex by remember { mutableStateOf(0) }
@@ -963,6 +1102,23 @@ fun EpisodesTabContent(
                         
                         displayEpisodes.forEach { episode ->
                             val isFiller = episode.isFiller
+                            val isEpisodeFinished = if (watchHistory != null) {
+                                if (watchHistory.episodeTitle == "Finished Watching") {
+                                    true
+                                } else if (watchHistory.episodeId == episode.id) {
+                                    val progress = if (watchHistory.totalDuration > 0) {
+                                        watchHistory.progressPosition.toFloat() / watchHistory.totalDuration.toFloat()
+                                    } else {
+                                        0f
+                                    }
+                                    progress >= 0.95f
+                                } else {
+                                    watchHistory.episodeNumber > episode.number
+                                }
+                            } else {
+                                false
+                            }
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -987,9 +1143,9 @@ fun EpisodesTabContent(
                                         modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f))
                                     )
                                     Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = "Play",
-                                        tint = Color.White.copy(alpha = 0.8f),
+                                        imageVector = if (isEpisodeFinished) Icons.Default.Replay else Icons.Default.PlayArrow,
+                                        contentDescription = if (isEpisodeFinished) "Replay" else "Play",
+                                        tint = if (isEpisodeFinished) CrunchyrollOrange else Color.White.copy(alpha = 0.8f),
                                         modifier = Modifier.align(Alignment.Center)
                                     )
                                 }

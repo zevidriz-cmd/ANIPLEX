@@ -2,7 +2,11 @@ package com.aniplex.app
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
@@ -39,8 +43,11 @@ import com.aniplex.app.presentation.screens.history.HistoryScreen
 import com.aniplex.app.presentation.screens.search.SearchScreen
 import com.aniplex.app.presentation.screens.splash.SplashScreen
 import com.aniplex.app.presentation.screens.downloads.DownloadsScreen
+import com.aniplex.app.theme.BackgroundVoid
 import com.aniplex.app.theme.CrunchyrollOrange
 import com.aniplex.app.theme.SurfaceDark
+import com.aniplex.app.theme.TextPrimary
+import com.aniplex.app.theme.TextSecondary
 
 @Composable
 fun MainNavigation() {
@@ -97,7 +104,7 @@ fun MainNavigation() {
                         backStack.add(Detail(animeId))
                     },
                     onEpisodeClick = { epId, animId, title, epNum, cat ->
-                        backStack.add(Player(epId, animId, title, epNum, cat, resumePlayback = false))
+                        backStack.add(Player(epId, animId, title, epNum, cat, resumePlayback = true))
                     },
                     onSearchClick = {
                         backStack.add(Search)
@@ -136,6 +143,7 @@ fun MainNavigation() {
                     onEpisodeClick = { epId, animId, title, epNum, cat ->
                         backStack.add(Player(epId, animId, title, epNum, cat, resumePlayback = true))
                     },
+                    onSearchClick = { backStack.add(Search) },
                     onBackClick = { backStack.removeLastOrNull() },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -157,7 +165,7 @@ fun MainNavigation() {
                     animeId = key.animeId,
                     onBackClick = { backStack.removeLastOrNull() },
                     onPlayClick = { epId, animId, title, epNum, cat ->
-                        backStack.add(Player(epId, animId, title, epNum, cat, resumePlayback = false))
+                        backStack.add(Player(epId, animId, title, epNum, cat, resumePlayback = true))
                     },
                     onRecommendationClick = { recId ->
                         backStack.add(Detail(recId))
@@ -178,13 +186,16 @@ fun MainNavigation() {
                     category = key.category,
                     resumePlayback = key.resumePlayback,
                     onBackClick = { backStack.removeLastOrNull() },
+                    onAnimeClick = { animeId ->
+                        backStack.add(Detail(animeId))
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }
             entry<Downloads> {
                 DownloadsScreen(
                     onPlayClick = { epId, animId, title, epNum, cat ->
-                        backStack.add(Player(epId, animId, title, epNum, cat, resumePlayback = false))
+                        backStack.add(Player(epId, animId, title, epNum, cat, resumePlayback = true))
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -194,7 +205,7 @@ fun MainNavigation() {
 }
 
 enum class DashboardTab {
-    HOME, MY_LISTS, DOWNLOADS, BROWSE, SIMULCASTS, ACCOUNT
+    HOME, MY_LISTS, DOWNLOADS, BROWSE, ACCOUNT
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -221,18 +232,27 @@ fun DashboardShell(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.ic_aniplex_logo),
-                                    contentDescription = "ANIPLEX Logo",
-                                    modifier = Modifier.size(32.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFC5BAFF)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "A",
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color(0xFF13111E)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
                                 Text(
                                     text = "ANIPLEX",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 19.sp,
+                                    fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
-                                    letterSpacing = 1.sp
+                                    letterSpacing = 1.5.sp
                                 )
                             }
                         },
@@ -244,6 +264,22 @@ fun DashboardShell(
                                     tint = Color.White
                                 )
                             }
+                            IconButton(
+                                onClick = { selectedTab = DashboardTab.ACCOUNT },
+                                modifier = Modifier
+                                    .padding(end = 8.dp)
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF221F36))
+                                    .border(1.dp, Color(0xFFC5BAFF).copy(alpha = 0.5f), CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Profile",
+                                    tint = Color(0xFFC5BAFF),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = Color.Transparent,
@@ -251,7 +287,7 @@ fun DashboardShell(
                         ),
                         modifier = Modifier.background(
                             Brush.verticalGradient(
-                                colors = listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent)
+                                colors = listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)
                             )
                         )
                     )
@@ -260,50 +296,39 @@ fun DashboardShell(
                     TopAppBar(
                         title = {
                             Text(
-                                text = "Browse",
+                                text = "Discover",
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
-                    )
-                }
-                DashboardTab.SIMULCASTS -> {
-                    TopAppBar(
-                        title = {
-                            Text(
-                                text = "Simulcasts",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundVoid)
                     )
                 }
                 DashboardTab.ACCOUNT -> {
                     TopAppBar(
                         title = {
                             Text(
-                                text = "Account",
+                                text = "Account & Settings",
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundVoid)
                     )
                 }
                 else -> {
-                    // Downloads and My Lists screens handle their own TopAppBars natively
+                    // Downloads and My Lists screens handle top bar rendering
                 }
             }
         },
         bottomBar = {
             NavigationBar(
                 containerColor = SurfaceDark,
-                contentColor = Color.LightGray
+                contentColor = TextSecondary,
+                tonalElevation = 0.dp,
+                modifier = Modifier.border(width = (0.5).dp, color = Color(0xFF221F36), shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
             ) {
                 val activeColor = CrunchyrollOrange
                 
@@ -311,77 +336,80 @@ fun DashboardShell(
                     selected = selectedTab == DashboardTab.HOME,
                     onClick = { selectedTab = DashboardTab.HOME },
                     icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                    label = { Text("Home", fontSize = 10.sp) },
+                    label = { Text("Home", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = activeColor,
-                        selectedTextColor = activeColor,
-                        indicatorColor = Color.Transparent
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == DashboardTab.MY_LISTS,
-                    onClick = { selectedTab = DashboardTab.MY_LISTS },
-                    icon = { Icon(Icons.Default.Bookmark, contentDescription = "My Lists") },
-                    label = { Text("My Lists", fontSize = 10.sp) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = activeColor,
-                        selectedTextColor = activeColor,
-                        indicatorColor = Color.Transparent
+                        selectedIconColor = Color(0xFF13111E),
+                        selectedTextColor = TextPrimary,
+                        unselectedIconColor = TextSecondary,
+                        unselectedTextColor = TextSecondary,
+                        indicatorColor = activeColor
                     )
                 )
                 NavigationBarItem(
                     selected = selectedTab == DashboardTab.BROWSE,
                     onClick = { selectedTab = DashboardTab.BROWSE },
-                    icon = { Icon(Icons.Default.GridView, contentDescription = "Browse") },
-                    label = { Text("Browse", fontSize = 10.sp) },
+                    icon = { Icon(Icons.Default.GridView, contentDescription = "Discover") },
+                    label = { Text("Discover", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = activeColor,
-                        selectedTextColor = activeColor,
-                        indicatorColor = Color.Transparent
+                        selectedIconColor = Color(0xFF13111E),
+                        selectedTextColor = TextPrimary,
+                        unselectedIconColor = TextSecondary,
+                        unselectedTextColor = TextSecondary,
+                        indicatorColor = activeColor
                     )
                 )
                 NavigationBarItem(
-                    selected = selectedTab == DashboardTab.SIMULCASTS,
-                    onClick = { selectedTab = DashboardTab.SIMULCASTS },
-                    icon = { Icon(Icons.Default.AutoAwesome, contentDescription = "Simulcasts") },
-                    label = { Text("Simulcasts", fontSize = 10.sp) },
+                    selected = selectedTab == DashboardTab.MY_LISTS,
+                    onClick = { selectedTab = DashboardTab.MY_LISTS },
+                    icon = { Icon(Icons.Default.Bookmark, contentDescription = "Library") },
+                    label = { Text("Library", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = activeColor,
-                        selectedTextColor = activeColor,
-                        indicatorColor = Color.Transparent
+                        selectedIconColor = Color(0xFF13111E),
+                        selectedTextColor = TextPrimary,
+                        unselectedIconColor = TextSecondary,
+                        unselectedTextColor = TextSecondary,
+                        indicatorColor = activeColor
                     )
                 )
                 NavigationBarItem(
-                    selected = selectedTab == DashboardTab.ACCOUNT,
-                    onClick = { selectedTab = DashboardTab.ACCOUNT },
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Account") },
-                    label = { Text("Account", fontSize = 10.sp) },
+                    selected = selectedTab == DashboardTab.DOWNLOADS,
+                    onClick = { selectedTab = DashboardTab.DOWNLOADS },
+                    icon = { Icon(Icons.Default.Download, contentDescription = "Offline") },
+                    label = { Text("Offline", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = activeColor,
-                        selectedTextColor = activeColor,
-                        indicatorColor = Color.Transparent
+                        selectedIconColor = Color(0xFF13111E),
+                        selectedTextColor = TextPrimary,
+                        unselectedIconColor = TextSecondary,
+                        unselectedTextColor = TextSecondary,
+                        indicatorColor = activeColor
                     )
                 )
             }
         }
     ) { innerPadding ->
-        val topPadding = if (selectedTab == DashboardTab.HOME) 0.dp else innerPadding.calculateTopPadding()
+        val topPadding = if (selectedTab == DashboardTab.HOME || selectedTab == DashboardTab.MY_LISTS || selectedTab == DashboardTab.DOWNLOADS) 0.dp else innerPadding.calculateTopPadding()
         val screenModifier = Modifier.padding(
             top = topPadding,
             bottom = innerPadding.calculateBottomPadding()
         )
         
         when (selectedTab) {
-            DashboardTab.HOME -> HomeScreen(onAnimeClick = onAnimeClick, modifier = screenModifier)
+            DashboardTab.HOME -> HomeScreen(
+                onAnimeClick = onAnimeClick,
+                onEpisodeClick = onEpisodeClick,
+                onSearchClick = onSearchClick,
+                onNavigateToDiscover = { selectedTab = DashboardTab.BROWSE },
+                modifier = screenModifier
+            )
             DashboardTab.MY_LISTS -> WatchlistScreen(
                 onAnimeClick = onAnimeClick,
                 onEpisodeClick = onEpisodeClick,
+                onSearchClick = onSearchClick,
                 onBackClick = null,
                 modifier = screenModifier
             )
             DashboardTab.DOWNLOADS -> DownloadsScreen(onPlayClick = onEpisodeClick, modifier = screenModifier)
             DashboardTab.BROWSE -> BrowseScreen(onAnimeClick = onAnimeClick, modifier = screenModifier)
-            DashboardTab.SIMULCASTS -> ScheduleScreen(onAnimeClick = onAnimeClick, modifier = screenModifier)
             DashboardTab.ACCOUNT -> ProfileScreen(
                 onSignOut = onSignOut,
                 onWatchlistClick = onWatchlistClick,

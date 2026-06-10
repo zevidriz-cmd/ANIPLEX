@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -26,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniplex.app.presentation.components.AnimeCard
@@ -43,8 +46,9 @@ fun BrowseScreen(
     modifier: Modifier = Modifier,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
-    var selectedTopTab by remember { mutableStateOf(0) }
     val topTabs = listOf("All Anime", "Simulcasts", "Anime Genres")
+    val pagerState = rememberPagerState(pageCount = { topTabs.size })
+    val coroutineScope = rememberCoroutineScope()
 
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val selectedGenre by viewModel.selectedGenre.collectAsStateWithLifecycle()
@@ -80,12 +84,12 @@ fun BrowseScreen(
     ) {
         // Stitch Top Tab Row
         TabRow(
-            selectedTabIndex = selectedTopTab,
+            selectedTabIndex = pagerState.currentPage,
             containerColor = BackgroundVoid,
             contentColor = Color.White,
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
-                    Modifier.tabIndicatorOffset(tabPositions[selectedTopTab]),
+                    Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
                     color = CrunchyrollOrange
                 )
             },
@@ -95,8 +99,12 @@ fun BrowseScreen(
         ) {
             topTabs.forEachIndexed { index, title ->
                 Tab(
-                    selected = selectedTopTab == index,
-                    onClick = { selectedTopTab = index },
+                    selected = pagerState.currentPage == index,
+                    onClick = { 
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(index)
+                        }
+                    },
                     text = {
                         Text(
                             text = title,
@@ -109,12 +117,13 @@ fun BrowseScreen(
             }
         }
 
-        Box(
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-        ) {
-            when (selectedTopTab) {
+        ) { page ->
+            when (page) {
                 0 -> {
                     // All Anime Tab
                     AllAnimeContent(
@@ -141,7 +150,9 @@ fun BrowseScreen(
                         genres = genres,
                         onGenreClick = { genreKey ->
                             viewModel.onGenreChange(genreKey)
-                            selectedTopTab = 0 // Switch back to All Anime
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(0)
+                            }
                         }
                     )
                 }

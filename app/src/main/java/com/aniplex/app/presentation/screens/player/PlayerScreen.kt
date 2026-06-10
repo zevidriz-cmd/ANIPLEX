@@ -157,6 +157,7 @@ data class PlayerScreenState(
 
 data class PlayerCallbacks(
     val onBackClick: () -> Unit,
+    val onAnimeClick: () -> Unit,
     val toggleLike: () -> Unit,
     val toggleDislike: () -> Unit,
     val onDownloadClick: () -> Unit,
@@ -206,6 +207,7 @@ fun PlayerScreen(
     category: String,
     resumePlayback: Boolean = false,
     onBackClick: () -> Unit,
+    onAnimeClick: (String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
@@ -717,14 +719,20 @@ fun PlayerScreen(
                 .setPreferredTextLanguage(if (currentSubtitleSelection == "off") "en" else currentSubtitleSelection)
                 .build()
 
+            if (!hasSeekedToInitialProgress && localResumePlayback && initialProgress > 0L) {
+                exoPlayer.seekTo(initialProgress)
+                hasSeekedToInitialProgress = true
+                Log.d("ANIPLEX_PLAYER", "Successfully seeked inside stream LaunchedEffect: $initialProgress")
+            }
+
             exoPlayer.prepare()
             exoPlayer.playWhenReady = true
         }
     }
 
     // Only trigger this effect when the initialProgress actually arrives from Firestore or the player ref changes
-    LaunchedEffect(initialProgress, exoPlayerRef) {
-        if (!hasSeekedToInitialProgress && localResumePlayback && initialProgress > 0L) {
+    LaunchedEffect(initialProgress, exoPlayerRef, capturedStreamUrl) {
+        if (!hasSeekedToInitialProgress && localResumePlayback && initialProgress > 0L && capturedStreamUrl != null) {
             val player = exoPlayerRef
             if (player != null) {
                 player.seekTo(initialProgress)
@@ -906,6 +914,7 @@ fun PlayerScreen(
 
     val callbacks = PlayerCallbacks(
         onBackClick = onBackClick,
+        onAnimeClick = { onAnimeClick(animeId) },
         toggleLike = { viewModel.toggleLike() },
         toggleDislike = { viewModel.toggleDislike() },
         onDownloadClick = {
@@ -1079,7 +1088,10 @@ private fun PlayerScreenContent(
                         text = animeTitle,
                         color = CrunchyrollOrange,
                         fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable { callbacks.onAnimeClick() }
+                            .padding(vertical = 4.dp)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -1632,7 +1644,10 @@ fun ExoVideoPlayer(
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .clickable { callbacks.onAnimeClick() }
+                                        .padding(vertical = 4.dp)
                                 )
                                 Text(
                                     text = state.currentEpisode?.title ?: "Episode $currentEpNum",

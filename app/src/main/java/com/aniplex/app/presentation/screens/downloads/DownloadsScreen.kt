@@ -24,7 +24,10 @@ import coil.compose.AsyncImage
 import com.aniplex.app.data.download.DownloadManager
 import com.aniplex.app.data.download.DownloadStatus
 import com.aniplex.app.data.download.DownloadTask
+import com.aniplex.app.theme.BackgroundVoid
 import com.aniplex.app.theme.CrunchyrollOrange
+import com.aniplex.app.theme.ErrorColor
+import com.aniplex.app.theme.SuccessColor
 import com.aniplex.app.theme.SurfaceDark
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,17 +50,17 @@ fun DownloadsScreen(
                         fontSize = 20.sp
                     )
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundVoid)
             )
         },
-        containerColor = Color.Black
+        containerColor = BackgroundVoid
     ) { innerPadding ->
         if (downloads.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .background(Color.Black),
+                    .background(BackgroundVoid),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -88,7 +91,7 @@ fun DownloadsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .background(Color.Black),
+                    .background(BackgroundVoid),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -192,7 +195,7 @@ fun DownloadItemRow(
                 DownloadStatus.COMPLETED -> {
                     Text(
                         text = "Completed • Offline Playback",
-                        color = Color.Green,
+                        color = SuccessColor,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -200,7 +203,7 @@ fun DownloadItemRow(
                 DownloadStatus.FAILED -> {
                     Text(
                         text = "Download Failed",
-                        color = Color.Red,
+                        color = ErrorColor,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )

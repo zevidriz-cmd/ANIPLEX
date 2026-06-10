@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import com.aniplex.app.data.download.DownloadManager
 import com.aniplex.app.data.download.DownloadStatus
@@ -60,13 +63,15 @@ import com.aniplex.app.theme.*
 fun WatchlistScreen(
     onAnimeClick: (String) -> Unit,
     onEpisodeClick: (String, String, String, Int, String) -> Unit,
+    onSearchClick: () -> Unit = {},
     onBackClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     watchlistViewModel: WatchlistViewModel = hiltViewModel(),
     historyViewModel: HistoryViewModel = hiltViewModel()
 ) {
-    var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Watchlist", "History", "Downloads")
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
+    val coroutineScope = rememberCoroutineScope()
 
     val watchlistState by watchlistViewModel.watchlistState.collectAsStateWithLifecycle()
     val historyState by historyViewModel.historyState.collectAsStateWithLifecycle()
@@ -100,7 +105,7 @@ fun WatchlistScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Search click will be wired via Dashboard */ }) {
+                    IconButton(onClick = onSearchClick) {
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search",
@@ -123,12 +128,12 @@ fun WatchlistScreen(
         ) {
             // Segmented Tabs
             TabRow(
-                selectedTabIndex = selectedTab,
+                selectedTabIndex = pagerState.currentPage,
                 containerColor = BackgroundVoid,
                 contentColor = Color.White,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                        Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
                         color = CrunchyrollOrange
                     )
                 },
@@ -138,8 +143,12 @@ fun WatchlistScreen(
             ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
+                        selected = pagerState.currentPage == index,
+                        onClick = { 
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(index)
+                            }
+                        },
                         text = {
                             Text(
                                 text = title,
@@ -152,12 +161,13 @@ fun WatchlistScreen(
                 }
             }
 
-            Box(
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-            ) {
-                when (selectedTab) {
+            ) { page ->
+                when (page) {
                     0 -> {
                         // Watchlist Tab
                         WatchlistTabContent(
@@ -289,13 +299,17 @@ fun WatchlistTabContent(
                                 )
                             }
                         }
+                        
+                        val context = LocalContext.current
                         Icon(
                             imageVector = Icons.Default.Tune,
                             contentDescription = "Filter",
                             tint = TextSecondary,
                             modifier = Modifier
                                 .size(20.dp)
-                                .clickable { /* Filter option */ }
+                                .clickable { 
+                                    android.widget.Toast.makeText(context, "Filter options coming soon", android.widget.Toast.LENGTH_SHORT).show()
+                                }
                         )
                     }
                 }
@@ -339,7 +353,8 @@ fun WatchlistTabContent(
                             WatchlistRowCard(
                                 item = item,
                                 onClick = { onAnimeClick(item.id) },
-                                onToggleFavorite = { onToggleFavorite(item.id, item.isFavorite) }
+                                onToggleFavorite = { onToggleFavorite(item.id, item.isFavorite) },
+                                onDetailsClick = { onAnimeClick(item.id) }
                             )
                         }
                     }
@@ -353,7 +368,8 @@ fun WatchlistTabContent(
 fun WatchlistRowCard(
     item: WatchlistItem,
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit
+    onToggleFavorite: () -> Unit,
+    onDetailsClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -400,7 +416,7 @@ fun WatchlistRowCard(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Stitch Buttons: Favorite Heart + more_vert
+            // Stitch Buttons: Favorite Heart
             IconButton(onClick = onToggleFavorite) {
                 Icon(
                     imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -410,14 +426,32 @@ fun WatchlistRowCard(
                 )
             }
 
-            IconButton(onClick = { /* Actions */ }) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More Options",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+                var showMenu by remember { mutableStateOf(false) }
+
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More Options",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        containerColor = SurfaceDarkVariant
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Remove from Watchlist", color = Color.White) },
+                            onClick = {
+                                showMenu = false
+                                onToggleFavorite()
+                            }
+                        )
+                    }
+                }
         }
     }
 }
@@ -472,7 +506,8 @@ fun HistoryTabContent(
                                 defaultAudio
                             )
                         },
-                        onDetailsClick = { onAnimeClick(item.animeId) }
+                        onDetailsClick = { onAnimeClick(item.animeId) },
+                        onRemove = { onRemove(item.animeId) }
                     )
                 }
             }
@@ -485,7 +520,8 @@ fun HistoryGridCard(
     item: HistoryItem,
     defaultAudio: String,
     onPlayClick: () -> Unit,
-    onDetailsClick: () -> Unit
+    onDetailsClick: () -> Unit,
+    onRemove: () -> Unit
 ) {
     val progress = if (item.totalDuration > 0) {
         item.progressPosition.toFloat() / item.totalDuration.toFloat()
@@ -596,16 +632,41 @@ fun HistoryGridCard(
                     )
                 }
 
-                IconButton(
-                    onClick = onDetailsClick,
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "Options",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(16.dp)
-                    )
+                var showMenu by remember { mutableStateOf(false) }
+
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Options",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        containerColor = SurfaceDarkVariant
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Remove from History", color = Color.White) },
+                            onClick = {
+                                showMenu = false
+                                onRemove()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Go to Details", color = Color.White) },
+                            onClick = {
+                                showMenu = false
+                                onDetailsClick()
+                            }
+                        )
+                    }
                 }
             }
         }

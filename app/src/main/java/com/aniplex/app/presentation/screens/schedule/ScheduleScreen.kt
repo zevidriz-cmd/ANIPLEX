@@ -134,7 +134,7 @@ fun ScheduleScreen(
                         contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(state.schedules, key = { it.id }) { item ->
+                        items(state.schedules) { item ->
                             ScheduleItemCard(
                                 item = item,
                                 selectedDate = selectedDate,

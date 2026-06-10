@@ -1,5 +1,7 @@
 package com.aniplex.app.presentation.screens.player.components
 
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -148,8 +150,11 @@ fun PlayerControlsOverlay(
                     }
                 }
                 
+                val context = LocalContext.current
                 IconButton(
-                    onClick = { /* Cast Placeholder */ },
+                    onClick = { 
+                        Toast.makeText(context, "Casting coming soon", Toast.LENGTH_SHORT).show()
+                    },
                     modifier = Modifier.size(48.dp)
                 ) {
                     Icon(

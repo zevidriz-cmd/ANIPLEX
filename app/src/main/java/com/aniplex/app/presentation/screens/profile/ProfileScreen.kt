@@ -320,19 +320,24 @@ fun ProfileScreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val context = LocalContext.current
                 Text(
                     text = "Terms of Service",
                     fontSize = 11.sp,
                     color = CrunchyrollOrange,
                     textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.clickable { /* Terms */ }
+                    modifier = Modifier.clickable { 
+                        android.widget.Toast.makeText(context, "Opening Terms of Service...", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 )
                 Text(
                     text = "Privacy Policy",
                     fontSize = 11.sp,
                     color = CrunchyrollOrange,
                     textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.clickable { /* Privacy */ }
+                    modifier = Modifier.clickable { 
+                        android.widget.Toast.makeText(context, "Opening Privacy Policy...", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 )
             }
         }

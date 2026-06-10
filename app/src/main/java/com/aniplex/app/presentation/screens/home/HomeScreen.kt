@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -44,9 +45,11 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.aniplex.app.domain.model.Anime
+import com.aniplex.app.domain.model.HistoryItem
 import com.aniplex.app.domain.model.HomeData
 import com.aniplex.app.domain.model.SpotlightAnime
 import com.aniplex.app.presentation.components.AnimeCard
+import com.aniplex.app.presentation.components.ContinueWatchingCard
 import com.aniplex.app.presentation.components.AnimeRowShimmer
 import com.aniplex.app.presentation.components.SpotlightBannerShimmer
 import com.aniplex.app.theme.BackgroundVoid
@@ -54,16 +57,22 @@ import com.aniplex.app.theme.CrunchyrollOrange
 import com.aniplex.app.theme.NetflixRed
 import com.aniplex.app.theme.SurfaceDark
 import com.aniplex.app.theme.SurfaceDarkVariant
+import com.aniplex.app.theme.TextMuted
+import com.aniplex.app.theme.TextSecondary
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onAnimeClick: (String) -> Unit,
+    onEpisodeClick: (String, String, String, Int, String) -> Unit,
+    onSearchClick: () -> Unit = {},
+    onNavigateToDiscover: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val continueWatchingList by viewModel.continueWatchingList.collectAsStateWithLifecycle()
     val isRefreshing = uiState is HomeUiState.Loading && (uiState as? HomeUiState.Success) != null
     
     var dominantColor by remember { mutableStateOf(BackgroundVoid) }
@@ -75,8 +84,8 @@ fun HomeScreen(
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        animatedColor.copy(alpha = 0.4f),
-                        BackgroundVoid,
+                        animatedColor.copy(alpha = 0.35f),
+                        BackgroundVoid.copy(alpha = 0.95f),
                         BackgroundVoid
                     )
                 )
@@ -89,7 +98,6 @@ fun HomeScreen(
         ) {
             when (val state = uiState) {
                 is HomeUiState.Loading -> {
-                    // Show premium shimmer skeletons while loading
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -104,9 +112,17 @@ fun HomeScreen(
                 is HomeUiState.Success -> {
                     HomeContent(
                         homeData = state.homeData,
+                        continueWatchingList = continueWatchingList,
                         onAnimeClick = onAnimeClick,
+                        onEpisodeClick = onEpisodeClick,
                         onColorExtracted = { dominantColor = it },
-                        modifier = Modifier.fillMaxSize()
+                        onSearchClick = onSearchClick,
+                        onNavigateToDiscover = onNavigateToDiscover,
+                        modifier = Modifier.fillMaxSize(),
+                        onRemoveFromHistory = { viewModel.removeFromHistory(it) },
+                        onMarkAsFinished = { id, title, poster -> viewModel.markAsWatched(id, title, poster) },
+                        onAddToWatchlist = { id, title, poster -> viewModel.addToWatchlist(id, title, poster) },
+                        onMarkAsWatched = { id, title, poster -> viewModel.markAsWatched(id, title, poster) }
                     )
                 }
                 is HomeUiState.Error -> {
@@ -124,16 +140,26 @@ fun HomeScreen(
 @Composable
 fun HomeContent(
     homeData: HomeData,
+    continueWatchingList: List<HistoryItem>,
     onAnimeClick: (String) -> Unit,
+    onEpisodeClick: (String, String, String, Int, String) -> Unit,
     onColorExtracted: (Color) -> Unit,
-    modifier: Modifier = Modifier
+    onSearchClick: () -> Unit = {},
+    onNavigateToDiscover: () -> Unit = {},
+    modifier: Modifier = Modifier,
+    onRemoveFromHistory: ((String) -> Unit)? = null,
+    onMarkAsFinished: ((String, String, String) -> Unit)? = null,
+    onAddToWatchlist: ((String, String, String) -> Unit)? = null,
+    onMarkAsWatched: ((String, String, String) -> Unit)? = null
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        // 1. Spotlight Banner Carousel (Auto-scrolling Pager)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 1. Spotlight Banner Carousel (Premium Floating Card Pager)
         if (homeData.spotlightAnimes.isNotEmpty()) {
             SpotlightCarousel(
                 spotlightList = homeData.spotlightAnimes,
@@ -141,60 +167,131 @@ fun HomeContent(
                 onColorExtracted = onColorExtracted,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(380.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .height(390.dp)
             )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
+        // 1.5. Premium Continue Watching Row (Direct resume access!)
+        if (continueWatchingList.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Text(
+                    text = "Continue Watching",
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    letterSpacing = 0.5.sp,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                )
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(continueWatchingList) { item ->
+                        ContinueWatchingCard(
+                            item = item,
+                            onClick = {
+                                onEpisodeClick(
+                                    item.episodeId,
+                                    item.animeId,
+                                    item.animeTitle,
+                                    item.episodeNumber,
+                                    "sub"
+                                )
+                            },
+                            onRemoveFromHistory = onRemoveFromHistory,
+                            onMarkAsFinished = onMarkAsFinished
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+        }
 
-        // 3. Trending Section
+        // 2. Genres list
+        if (homeData.genres.isNotEmpty()) {
+            GenreChipsRow(
+                genres = homeData.genres,
+                onGenreClick = { /* Can pass genre to search in future, for now just open search */ onSearchClick() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            )
+        }
+
+        // 3. Trending Now Section (Landscape styled video-tiles like in the screenshot!)
         if (homeData.trendingAnimes.isNotEmpty()) {
             AnimeSectionRow(
                 title = "Trending Now",
                 animeList = homeData.trendingAnimes,
-                onAnimeClick = onAnimeClick
+                onAnimeClick = onAnimeClick,
+                isLandscape = true,
+                onSeeAllClick = onNavigateToDiscover,
+                onAddToWatchlist = onAddToWatchlist,
+                onMarkAsWatched = onMarkAsWatched
             )
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // 4. Top Airing Section
+        // 4. Top Airing Section (Portrait)
         if (homeData.topAiringAnimes.isNotEmpty()) {
             AnimeSectionRow(
                 title = "Top Airing",
                 animeList = homeData.topAiringAnimes,
-                onAnimeClick = onAnimeClick
+                onAnimeClick = onAnimeClick,
+                isLandscape = false,
+                onSeeAllClick = onNavigateToDiscover,
+                onAddToWatchlist = onAddToWatchlist,
+                onMarkAsWatched = onMarkAsWatched
             )
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // 5. Recently Added Section (between Airing and Popular)
+        // 5. Recently Added Section (Landscape)
         if (homeData.recentlyUpdatedAnimes.isNotEmpty()) {
             AnimeSectionRow(
                 title = "Recently Added",
                 animeList = homeData.recentlyUpdatedAnimes,
-                onAnimeClick = onAnimeClick
+                onAnimeClick = onAnimeClick,
+                isLandscape = true,
+                onSeeAllClick = onNavigateToDiscover,
+                onAddToWatchlist = onAddToWatchlist,
+                onMarkAsWatched = onMarkAsWatched
             )
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // 6. Most Popular Section
+        // 6. Most Popular Section (Portrait)
         if (homeData.mostPopularAnimes.isNotEmpty()) {
             AnimeSectionRow(
                 title = "Most Popular",
                 animeList = homeData.mostPopularAnimes,
-                onAnimeClick = onAnimeClick
+                onAnimeClick = onAnimeClick,
+                isLandscape = false,
+                onSeeAllClick = onNavigateToDiscover,
+                onAddToWatchlist = onAddToWatchlist,
+                onMarkAsWatched = onMarkAsWatched
             )
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // 7. Top Upcoming Section
+        // 7. Top Upcoming Section (Portrait)
         if (homeData.topUpcomingAnimes.isNotEmpty()) {
             AnimeSectionRow(
                 title = "Top Upcoming",
                 animeList = homeData.topUpcomingAnimes,
-                onAnimeClick = onAnimeClick
+                onAnimeClick = onAnimeClick,
+                isLandscape = false,
+                onSeeAllClick = onNavigateToDiscover,
+                onAddToWatchlist = onAddToWatchlist,
+                onMarkAsWatched = onMarkAsWatched
             )
             Spacer(modifier = Modifier.height(32.dp))
         }
@@ -211,7 +308,7 @@ fun SpotlightCarousel(
     val pagerState = rememberPagerState(pageCount = { spotlightList.size })
     val context = androidx.compose.ui.platform.LocalContext.current
     
-    // Extract color for the current page
+    // Extract color for the current page to animate background tint
     LaunchedEffect(pagerState.currentPage) {
         if (spotlightList.isNotEmpty()) {
             val currentPoster = spotlightList[pagerState.currentPage].poster
@@ -241,7 +338,7 @@ fun SpotlightCarousel(
     // Auto-scroll loop
     LaunchedEffect(key1 = true) {
         while (true) {
-            delay(4000)
+            delay(5000)
             if (spotlightList.isNotEmpty()) {
                 val nextPage = (pagerState.currentPage + 1) % spotlightList.size
                 pagerState.animateScrollToPage(nextPage)
@@ -249,187 +346,187 @@ fun SpotlightCarousel(
         }
     }
 
-    Box(modifier = modifier) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
-            val anime = spotlightList[page]
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable { onAnimeClick(anime.id) }
-            ) {
-                // Background Poster Image
-                AsyncImage(
-                    model = anime.poster,
-                    contentDescription = anime.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // Dark ambient gradient overlay (Netflix cinema feel)
+    Card(
+        modifier = modifier
+            .border(
+                width = 1.dp,
+                color = Color(0xFF2C2A47),
+                shape = RoundedCornerShape(24.dp)
+            ),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceDark)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val anime = spotlightList[page]
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.5f),
-                                    BackgroundVoid
-                                )
-                            )
-                        )
-                )
-
-                // Content Panel Overlay
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomStart)
-                        .padding(horizontal = 20.dp, vertical = 24.dp),
-                    verticalArrangement = Arrangement.Bottom
+                        .clickable { onAnimeClick(anime.id) }
                 ) {
-                    // Rank Badge
-                    if (anime.rank > 0) {
-                        Box(
-                            modifier = Modifier
-                                .padding(bottom = 6.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(MaterialTheme.colorScheme.primary)
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "#${anime.rank} Spotlight",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-                    }
-
-                    // Anime Name Title
-                    Text(
-                        text = anime.name,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 34.sp
+                    // Background Poster Image
+                    AsyncImage(
+                        model = anime.poster,
+                        contentDescription = anime.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    // Cinematic dark blue-black gradient overlay
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color(0xFF0D0C15).copy(alpha = 0.35f),
+                                        Color(0xFF0D0C15).copy(alpha = 0.95f)
+                                    )
+                                )
+                            )
+                    )
 
-                    // Badges Info (Sub, Dub, Type, etc.)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    // Card Info Overlay
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomStart)
+                            .padding(horizontal = 20.dp, vertical = 20.dp),
+                        verticalArrangement = Arrangement.Bottom
                     ) {
-                        anime.otherInfo.forEach { info ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = info.uppercase(),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color.LightGray
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Summary Description
-                    if (anime.description.isNotBlank()) {
-                        Text(
-                            text = anime.description,
-                            fontSize = 12.sp,
-                            color = Color.LightGray,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                            lineHeight = 18.sp,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
-                    }
-
-                    // Watch Now and Bookmark CTA Buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
-                            onClick = { onAnimeClick(anime.id) },
-                            shape = CircleShape,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                            contentPadding = PaddingValues(vertical = 14.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = "Watch",
-                                    tint = Color.Black,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Start Watching E1",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Black
-                                )
-                            }
-                        }
-
+                        // Season Finale / Spotlight Badge (User screenshot violet style)
+                        val badgeText = if (anime.id.contains("solo") || anime.rank == 1) "SEASON FINALE" else "SPOTLIGHT #${anime.rank}"
                         Box(
                             modifier = Modifier
-                                .size(50.dp)
-                                .clip(CircleShape)
-                                .background(Color.Transparent)
-                                .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                                .clickable { /* Add to Watchlist action */ },
-                            contentAlignment = Alignment.Center
+                                .padding(bottom = 8.dp)
+                                .clip(RoundedCornerShape(32.dp))
+                                .background(Color(0xFFC5BAFF)) // Premium light lavender purple badge background
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
-                            Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Default.BookmarkBorder,
-                                contentDescription = "Add to List",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                            Text(
+                                text = badgeText.uppercase(),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF13111E), // Dark navy text for contrast
+                                letterSpacing = 0.5.sp
                             )
+                        }
+
+                        // Anime Title Header
+                        Text(
+                            text = anime.name,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            lineHeight = 32.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Badges Info
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            anime.otherInfo.take(3).forEach { info ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF222036))
+                                        .border(1.dp, Color(0xFF333054), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = info.uppercase(),
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextSecondary
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Description Summary
+                        if (anime.description.isNotBlank()) {
+                            Text(
+                                text = anime.description,
+                                fontSize = 12.sp,
+                                color = TextSecondary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                lineHeight = 16.sp,
+                                modifier = Modifier.padding(bottom = 14.dp)
+                            )
+                        }
+
+                        // CTA Buttons
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = { onAnimeClick(anime.id) },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = CrunchyrollOrange),
+                                contentPadding = PaddingValues(vertical = 12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Watch",
+                                        tint = Color(0xFF13111E),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "WATCH NOW",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color(0xFF13111E)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
-        
-        // Pager Indicators
-        Row(
-            Modifier
-                .height(30.dp)
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            repeat(spotlightList.size) { iteration ->
-                val color = if (pagerState.currentPage == iteration) CrunchyrollOrange else Color.LightGray.copy(alpha = 0.5f)
-                val width = if (pagerState.currentPage == iteration) 24.dp else 12.dp
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 3.dp)
-                        .height(4.dp)
-                        .width(width)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(color)
-                )
+            
+            // Carousel Indicators top-end
+            Row(
+                Modifier
+                    .height(24.dp)
+                    .align(Alignment.TopEnd)
+                    .padding(top = 16.dp, end = 16.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(spotlightList.size) { iteration ->
+                    val color = if (pagerState.currentPage == iteration) CrunchyrollOrange else Color.LightGray.copy(alpha = 0.4f)
+                    val size = if (pagerState.currentPage == iteration) 7.dp else 4.dp
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 2.5.dp)
+                            .size(size)
+                            .clip(CircleShape)
+                            .background(color)
+                    )
+                }
             }
         }
     }
@@ -438,6 +535,7 @@ fun SpotlightCarousel(
 @Composable
 fun GenreChipsRow(
     genres: List<String>,
+    onGenreClick: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     LazyRow(
@@ -449,9 +547,9 @@ fun GenreChipsRow(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
-                    .background(SurfaceDark)
-                    .border(1.dp, SurfaceDarkVariant, RoundedCornerShape(16.dp))
-                    .clickable { /* Genre click logic can be added later */ }
+                    .background(SurfaceDark.copy(alpha = 0.6f))
+                    .border(1.dp, Color(0xFF222036), RoundedCornerShape(16.dp))
+                    .clickable { onGenreClick(genre) }
                     .padding(horizontal = 14.dp, vertical = 6.dp)
             ) {
                 Text(
@@ -470,25 +568,64 @@ fun AnimeSectionRow(
     title: String,
     animeList: List<Anime>,
     onAnimeClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isLandscape: Boolean = false,
+    onSeeAllClick: (() -> Unit)? = null,
+    onAddToWatchlist: ((String, String, String) -> Unit)? = null,
+    onMarkAsWatched: ((String, String, String) -> Unit)? = null
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            modifier = Modifier.padding(start = 16.dp, bottom = 12.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            
+            if (onSeeAllClick != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable { onSeeAllClick() }
+                        .padding(4.dp)
+                ) {
+                    Text(
+                        text = "See all",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = CrunchyrollOrange
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowRight,
+                        contentDescription = "See all $title",
+                        tint = CrunchyrollOrange,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.padding(top = 4.dp)
         ) {
             items(animeList) { anime ->
                 AnimeCard(
                     anime = anime,
-                    onClick = onAnimeClick
+                    onClick = onAnimeClick,
+                    isLandscape = isLandscape,
+                    onAddToWatchlist = onAddToWatchlist,
+                    onMarkAsWatched = onMarkAsWatched
                 )
             }
         }
@@ -544,13 +681,13 @@ fun ErrorLayout(
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Retry",
-                    tint = Color.White
+                    tint = Color(0xFF13111E)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "RETRY",
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = Color(0xFF13111E)
                 )
             }
         }

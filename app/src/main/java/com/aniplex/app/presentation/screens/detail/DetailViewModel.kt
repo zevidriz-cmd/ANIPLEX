@@ -62,6 +62,11 @@ class DetailViewModel @Inject constructor(
     val resolutionError: StateFlow<String?> = _resolutionError.asStateFlow()
 
     fun loadAnimeData(animeId: String, forceRefresh: Boolean = false) {
+        if (animeId.startsWith("mal-")) {
+            val malId = animeId.substringAfter("mal-")
+            resolveMALAndNavigate(malId)
+            return
+        }
         _detailState.value = DetailState.Loading
         _episodesState.value = DetailState.Loading
         _charactersState.value = DetailState.Loading
@@ -291,5 +296,68 @@ class DetailViewModel @Inject constructor(
 
     fun clearResolutionError() {
         _resolutionError.value = null
+    }
+
+    fun markAsWatched(animeId: String, title: String, poster: String) {
+        val userId = auth.currentUser?.uid ?: return
+        val profileId = profileManager.activeProfile.value?.id
+        viewModelScope.launch {
+            try {
+                val docRef = if (profileId != null) {
+                    firestore.collection("users").document(userId)
+                        .collection("profiles").document(profileId)
+                        .collection("history").document(animeId)
+                } else {
+                    firestore.collection("users").document(userId)
+                        .collection("history").document(animeId)
+                }
+                val data = hashMapOf(
+                    "animeId" to animeId,
+                    "animeTitle" to title,
+                    "poster" to poster,
+                    "episodeId" to "",
+                    "episodeNumber" to 1,
+                    "episodeTitle" to "Finished Watching",
+                    "progressPosition" to 100L,
+                    "totalDuration" to 100L,
+                    "updatedAt" to System.currentTimeMillis()
+                )
+                docRef.set(data).await()
+                _watchHistory.value = HistoryItem(
+                    animeId = animeId,
+                    animeTitle = title,
+                    poster = poster,
+                    episodeId = "",
+                    episodeNumber = 1,
+                    episodeTitle = "Finished Watching",
+                    progressPosition = 100L,
+                    totalDuration = 100L,
+                    updatedAt = System.currentTimeMillis()
+                )
+            } catch (e: Exception) {
+                // Squelch
+            }
+        }
+    }
+
+    fun removeFromHistory(animeId: String) {
+        val userId = auth.currentUser?.uid ?: return
+        val profileId = profileManager.activeProfile.value?.id
+        viewModelScope.launch {
+            try {
+                val docRef = if (profileId != null) {
+                    firestore.collection("users").document(userId)
+                        .collection("profiles").document(profileId)
+                        .collection("history").document(animeId)
+                } else {
+                    firestore.collection("users").document(userId)
+                        .collection("history").document(animeId)
+                }
+                docRef.delete().await()
+                _watchHistory.value = null
+            } catch (e: Exception) {
+                // Squelch
+            }
+        }
     }
 }

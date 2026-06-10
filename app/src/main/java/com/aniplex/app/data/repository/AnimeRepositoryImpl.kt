@@ -228,12 +228,92 @@ class AnimeRepositoryImpl @Inject constructor(
         }
     }
 
+    private fun convertJSTToUTC(jstTimeStr: String?): String {
+        if (jstTimeStr.isNullOrEmpty()) return "12:00"
+        val parts = jstTimeStr.split(':')
+        if (parts.size < 2) return jstTimeStr
+        val hours = parts[0].toIntOrNull()
+        val minutes = parts[1].toIntOrNull()
+        if (hours == null || minutes == null) return jstTimeStr
+        
+        var utcHours = hours - 9
+        if (utcHours < 0) {
+            utcHours += 24
+        }
+        
+        val paddedHours = utcHours.toString().padStart(2, '0')
+        val paddedMinutes = minutes.toString().padStart(2, '0')
+        return "$paddedHours:$paddedMinutes"
+    }
+
     override fun getSchedules(date: String?): Flow<Result<List<ScheduleItem>>> = flow {
         emit(Result.Loading)
+        
+        // 1. Fetch from Jikan API directly to get real, active schedules
+        try {
+            val dayOfWeek = try {
+                if (date != null) {
+                    val localDate = java.time.LocalDate.parse(date)
+                    localDate.dayOfWeek.name.lowercase(java.util.Locale.US)
+                } else {
+                    java.time.LocalDate.now().dayOfWeek.name.lowercase(java.util.Locale.US)
+                }
+            } catch (t: Throwable) {
+                "monday"
+            }
+
+            val urlString = "https://api.jikan.moe/v4/schedules?filter=$dayOfWeek"
+            
+            val jsonString = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val connection = java.net.URL(urlString).openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 8000
+                connection.readTimeout = 8000
+                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                connection.setRequestProperty("Accept", "application/json")
+                
+                if (connection.responseCode == 200) {
+                    connection.inputStream.bufferedReader().use { it.readText() }
+                } else {
+                    throw java.io.IOException("HTTP error: ${connection.responseCode}")
+                }
+            }
+            
+            val jikanResponse = gson.fromJson(jsonString, JikanSchedulesResponse::class.java)
+            val schedulesList = jikanResponse.data?.mapIndexed { index, anime ->
+                val malId = anime.mal_id
+                val idString = if (malId != null) "mal-$malId" else "mal-fallback-$index"
+                val name = anime.title_english ?: anime.title ?: "Unknown Title"
+                val time = convertJSTToUTC(anime.broadcast?.time)
+                val poster = anime.images?.webp?.large_image_url 
+                    ?: anime.images?.webp?.image_url 
+                    ?: anime.images?.jpg?.large_image_url 
+                    ?: anime.images?.jpg?.image_url 
+                    ?: ""
+                    
+                ScheduleItem(
+                    id = idString,
+                    title = name,
+                    time = time,
+                    episode = 1,
+                    poster = poster
+                )
+            }?.distinctBy { it.id } ?: emptyList()
+            
+            if (schedulesList.isNotEmpty()) {
+                emit(Result.Success(schedulesList))
+                return@flow
+            }
+        } catch (t: Throwable) {
+            // Fall back if Jikan is rate-limited or fails
+        }
+
+        // 2. Fallback to remote proxy
         try {
             val response = apiService.getSchedules(date)
             if (response.success) {
-                emit(Result.Success(response.data.scheduledAnimes?.map { it.toDomain() } ?: emptyList()))
+                val list = response.data.scheduledAnimes?.map { it.toDomain() }?.distinctBy { it.id } ?: emptyList()
+                emit(Result.Success(list))
             } else {
                 emit(Result.Error("Schedule load failed"))
             }
@@ -348,3 +428,29 @@ class AnimeRepositoryImpl @Inject constructor(
         }
     }
 }
+
+private data class JikanSchedulesResponse(
+    val data: List<JikanAnime>?
+)
+
+private data class JikanAnime(
+    val mal_id: Int?,
+    val title: String?,
+    val title_english: String?,
+    val images: JikanImages?,
+    val broadcast: JikanBroadcast?
+)
+
+private data class JikanImages(
+    val webp: JikanImagesStyle?,
+    val jpg: JikanImagesStyle?
+)
+
+private data class JikanImagesStyle(
+    val large_image_url: String?,
+    val image_url: String?
+)
+
+private data class JikanBroadcast(
+    val time: String?
+)
