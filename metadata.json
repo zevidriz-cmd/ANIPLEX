@@ -1,0 +1,6 @@
+{
+  "name": "ANIPLEX",
+  "description": "A feature-rich anime movie and Series streaming tracker application featuring modern Jetpack Compose, Material 3, and elegant UI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
